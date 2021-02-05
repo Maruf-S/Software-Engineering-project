@@ -1,17 +1,7 @@
 import mechanize
-import firebase_admin
-
-from firebase_admin import credentials, firestore, initialize_app
 
 from flask import Flask, jsonify, request
 from bs4 import BeautifulSoup
-
-cred = credentials.Certificate(
-    'example-d30da-firebase-adminsdk-9ljzb-35f9378503.json')
-default_app = initialize_app(cred)
-
-
-db = firestore.client()
 
 
 def get_result(page):
@@ -55,15 +45,32 @@ def get_result(page):
     total_list = None
     for i in clean_list:
         mesh_string += str(i)
-    print(mesh_string)
     return (mesh_string.replace("'", ""))
 
+# def send_name(page):
+#     soup = BeautifulSoup(page, 'html.parser')
+#     name_list = [tx.text.strip() for tx in soup.find_all(
+#         'td') if len(tx.text) > 2]
+#     return name_list
 
-def send_name(page):
+
+def send_details(page):
     soup = BeautifulSoup(page, 'html.parser')
-    name_list = [tx.text.strip() for tx in soup.find_all(
+    email = soup.find('input', {'id': 'Email'}).get('value')
+    telephone = soup.find('input', {'id': 'Telephone'}).get('value')
+    year = soup.find('input', {'id': 'Year'}).get('value')
+    month = soup.find('input', {'id': 'Month'}).get('value')
+    day = soup.find('input', {'id': 'Date'}).get('value')
+    info = [tx.text.strip() for tx in soup.find_all(
         'td') if len(tx.text) > 2]
-    return name_list
+
+    details_obj = {
+        "info": info,
+        "email": email,
+        "telephone": telephone,
+        "birth": year + "/" + month + "/" + day
+    }
+    return details_obj
 
 
 def Get_the_results(username, password):
@@ -89,10 +96,10 @@ def Get_the_results(username, password):
             print("You Fucked UP")
             return jsonify(error=f'You Fucked UP, this acc is no more')
         elif ("GradeReport" in str(rname)):  # it was an else before
+
             req = br.click_link(url="/Grade/GradeReport")
             br.open(req)
             content = (br.response().read())
-            send_name_array = send_name(rname)
             grade_string = (get_result(content))
 
             grade_string = grade_string.replace("[", "")
@@ -104,8 +111,9 @@ def Get_the_results(username, password):
             m = [semester.split("--") for semester in split_one]
             d = {}
 
-            person_ref = db.collection('students').add(
-                {"name": username, "password": password},)
+            details_pg = br.click_link(url='/StudentRecords/BasicInformation')
+            br.open(details_pg)
+            details = send_details(br.response().read())
 
             for j in range(len(m) - 1):
                 courses = []
@@ -140,13 +148,20 @@ def Get_the_results(username, password):
                     (m[j+1][-1][m[j+1][-1].find("CGPA") + 7: m[j+1][-1].find("CGPA") + 11]))
                 sgpa.append(
                     (m[j+1][-1][m[j+1][-1].find("SGPA") + 7: m[j+1][-1].find("SGPA") + 11]))
-            return jsonify(data={"profile": {"name": send_name_array[1],
-                                             "id": send_name_array[3],
-                                             "department": send_name_array[5],
-                                             "year": send_name_array[7], }, "grade": d,
-                                 "cgpa": cgpa, "sgpa": sgpa})
 
-            # print("USERGRADEREPORT\n" + con)
+            # creating person object with details result
+            person = {"name": details["info"][1],
+                      "id": details["info"][5],
+                      "department": details["info"][3],
+                      "year": details["info"][7],
+                      "birth": details["birth"],
+                      "mail": details["email"],
+                      "telephone": details["telephone"],
+                      "cgpa": cgpa,
+                      "sgpa": sgpa
+                      }
+
+            return jsonify(data={"profile": person, "grade": d})
 
         else:
             print("The username or the password is incorrect, Make sure you submitted both as for example \n Atr/2020/10,2020")
@@ -167,7 +182,6 @@ def dummy_api():
     password = request.args.get("password")
     if(username and password):
         return Get_the_results(username, password), 200
-        return jsonify(data="Jello"+username+password)
     else:
         return jsonify(error="404 not found", code=1), 404
 
