@@ -2,7 +2,9 @@ import mechanize
 
 from flask import Flask, jsonify, request
 from bs4 import BeautifulSoup
-
+import os
+import base64
+from io import BytesIO
 
 def get_result(page):
     read = page
@@ -54,7 +56,7 @@ def get_result(page):
 #     return name_list
 
 
-def send_details(page):
+def send_details(page,encodedImage):
     soup = BeautifulSoup(page, 'html.parser')
     email = soup.find('input', {'id': 'Email'}).get('value')
     telephone = soup.find('input', {'id': 'Telephone'}).get('value')
@@ -68,11 +70,30 @@ def send_details(page):
         "info": info,
         "email": email,
         "telephone": telephone,
-        "birth": year + "/" + month + "/" + day
+        "birth": year + "/" + month + "/" + day,
+        "photo":encodedImage
     }
     return details_obj
 
 
+def getStudentImage(soup, br):
+    soup = BeautifulSoup(soup, 'html.parser')
+    image_tags = soup.findAll('img')
+    for image in image_tags:
+        if ("studentphoto" in image['src']):
+            # filename = image['src'].lstrip('http://')
+            # filename = os.path.join(os.getcwd(), filename.replace('/', '_'))
+            try:
+                data = br.open(image['src']).read()
+                br.back()
+            except (mechanize.HTTPError, mechanize.URLError) as e:
+                print(f"HTTP READ ERROR, CODE ${4}")
+                return None
+            # save = open(filename, 'wb+')
+            # save.write(data)
+            # save.close()
+            base64Bytes = base64.b64encode(data)
+            return base64Bytes.decode('UTF8')
 def Get_the_results(username, password):
 
     try:
@@ -85,7 +106,7 @@ def Get_the_results(username, password):
         br["Password"] = password
         br.submit()
         rname = br.response().read()
-        if ("before your account gets locked out" in str(rname)):
+        if ("before your account gets locked ouss" in str(rname)):
             ss = BeautifulSoup(rname, 'html.parser')
             check_text = ss.find(
                 'div', {'class': 'validation-summary-errors'}).find('li').text
@@ -93,9 +114,9 @@ def Get_the_results(username, password):
             print(f"{check_text} ATTEMPTS BEFORE YOUR ACCOUNT GETS LOCKED OUT")
 
         elif ("Your account has been locked out" in str(rname)):
-            print("You Fucked UP")
-            return jsonify(error=f'You Fucked UP, this acc is no more')
-        elif ("GradeReport" in str(rname)):  # it was an else beforee
+            print("Account Locked OUT")
+            return jsonify(error=f'Your account got locked out')
+        elif ("GradeReport" in str(rname)):  # it was an else before
 
             req = br.click_link(url="/Grade/GradeReport")
             br.open(req)
@@ -113,8 +134,8 @@ def Get_the_results(username, password):
 
             details_pg = br.click_link(url='/StudentRecords/BasicInformation')
             br.open(details_pg)
-            details = send_details(br.response().read())
-
+            result = br.response().read()
+            details = send_details(result,getStudentImage(result,br))
             for j in range(len(m) - 1):
                 courses = []
                 for course in (m[j+1][1:]):
@@ -158,7 +179,8 @@ def Get_the_results(username, password):
                       "mail": details["email"],
                       "telephone": details["telephone"],
                       "cgpa": cgpa,
-                      "sgpa": sgpa
+                      "sgpa": sgpa,
+                      "photo":(details["photo"])
                       }
 
             return jsonify(data={"profile": person, "grade": d})
@@ -170,12 +192,11 @@ def Get_the_results(username, password):
     except Exception as e:
         print("An internal error has occurred please try again later.")
         print(e)
-        raise Exception(e)
         return jsonify(code=4, error=f"{e}")
 
 
 app = Flask(__name__)
-app.config["DEBUG"] = True
+app.config["DEBUG"] = False
 @app.route("/", methods=['GET'])
 def dummy_api():
     username = request.args.get("username")
