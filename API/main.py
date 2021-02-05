@@ -95,7 +95,7 @@ def Get_the_results(username, password):
         elif ("Your account has been locked out" in str(rname)):
             print("You Fucked UP")
             return jsonify(error=f'You Fucked UP, this acc is no more')
-        elif ("GradeReport" in str(rname)):  # it was an else before
+        elif ("GradeReport" in str(rname)):  # it was an else beforee
 
             req = br.click_link(url="/Grade/GradeReport")
             br.open(req)
