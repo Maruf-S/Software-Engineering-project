@@ -106,7 +106,7 @@ def Get_the_results(username, password):
         br["Password"] = password
         br.submit()
         rname = br.response().read()
-        if ("before your account gets locked out" in str(rname)):
+        if ("before your account gets locked ouss" in str(rname)):
             ss = BeautifulSoup(rname, 'html.parser')
             check_text = ss.find(
                 'div', {'class': 'validation-summary-errors'}).find('li').text
